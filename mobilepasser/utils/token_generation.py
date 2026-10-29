@@ -41,14 +41,21 @@ def truncated_value(h):
 
 def generate_mobilepass_token(activation_key, index, policy="", length=6):
     """Generate the token for a zero-based index; the caller tracks the index."""
+    code = ActivationCode(activation_key)
+    key = get_key(code.getEntropy().tobytes(), policy)
+    return generate_token_from_key(key, index, length)
+
+
+def generate_token_from_key(key, index, length=6):
+    """Generate an OTP from an already-derived Android key."""
     if not 0 <= index < 2**64:
         raise ValueError("Index must be an unsigned 64-bit integer.")
     if length < 1:
         raise ValueError("OTP length must be positive.")
+    if len(key) != 32:
+        raise ValueError("The imported OTP key must contain 32 bytes.")
 
     message = long_to_byte_array(index)
-    code = ActivationCode(activation_key)
-    key = get_key(code.getEntropy().tobytes(), policy)
     digest = hmac.new(key, message, hashlib.sha256).hexdigest()
     value = truncated_value(digest) % (10**length)
     return f"{value:0{length}d}"

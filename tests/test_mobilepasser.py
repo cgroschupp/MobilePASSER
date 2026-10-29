@@ -98,6 +98,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertEqual(stdout, "")
         self.assertIn("activation key", stderr)
+        self.assertIn("secret_key", stderr)
+        self.assertIn(str(self.config), stderr)
+        self.assertIn("not found or unreadable", stderr)
+        self.assertIn("--activation-key", stderr)
+        self.assertIn("--config-file", stderr)
 
     def test_explicit_zero_and_empty_policy_override_config(self):
         self.write_config(index="12", policy="policy")

@@ -16,6 +16,7 @@ uv run mobilepasser --help
 
 Dependencies are defined in `pyproject.toml` and pinned in `uv.lock`.
 uv manages the Python interpreter and the local `.venv` environment.
+Both bitstring 4.3+ and 5.x are supported; the lockfile selects bitstring 5.
 
 To install the command independently of the project environment:
 
@@ -50,7 +51,7 @@ optional arguments:
 
 ```sh
 uv run mobilepasser -k YOUR_ACTIVATION_KEY -x 0
-uv run mobilepasser -c ~/.mobilepasser.cfg
+uv run mobilepasser
 ```
 
 `uv run python -m mobilepasser` and `uv run python cli.py` also work.
@@ -78,3 +79,72 @@ Run the regression tests and build the package:
 uv run python -m unittest discover -s tests -v
 uv build
 ```
+
+Android backup import
+---------------------
+
+The inspected Android storage format can be imported with its original
+app-specific Android ID. A rooted device connected through an authorized ADB
+connection can supply both the Properties file and this ID directly:
+
+```sh
+uv run mobilepasser-import-android --from-adb \
+  --otp-length 6 --output ~/.mobilepasser.cfg
+```
+
+The Properties file is read from
+`/data/user/0/securecomputing.devices.android.controller/app_SAFENET_TOKEN_MP3`.
+If exactly one token file is present, it is selected automatically. If several
+are present, the command lists their filenames and requires `--token-file NAME`.
+`--serial DEVICE` selects the ADB device and `--user ID` selects the Android user.
+Properties are read into memory without creating a local backup copy.
+
+A local Properties file can also be supplied; `--from-adb` then reads only
+the Android ID from the device:
+
+```sh
+uv run mobilepasser-import-android /path/to/token.properties \
+  --from-adb --otp-length 6 --output ~/.mobilepasser.cfg
+```
+
+The importer supports the inspected device-binding mode `2`, tokens with or
+without a PIN, and 32-byte OTP keys. It verifies
+the metadata, token-label and wrapping-key HMACs before exporting the key.
+Existing output files are never overwritten; new files have permissions
+`0600`. Android data and counters are read without being changed. Neither the
+Android ID nor the recovered key is printed.
+
+For a token protected by a PIN, add `--pin` to the import command. The PIN is
+prompted without echo, preserves leading zeroes, and is used only to decrypt
+the Android backup. It is never saved in the configuration or printed. A
+wrong PIN fails the wrapping-key HMAC check and no output is created. Without
+`--pin`, the importer uses the app's internal default for tokens without a PIN.
+
+The exported configuration contains the decrypted OTP key and does not
+require a PIN during subsequent code generation; `--pin` is an import option,
+not encryption of the exported configuration.
+
+The resulting configuration uses `secret_key` instead of `activation_key`:
+the recovered key is already derived and must not pass through KDF1 again.
+An explicit `-k` still selects activation-key generation.
+
+**Confirm the token's generation mode and digit count before using it.**
+The importer copies the stored event counter and requires an explicit OTP
+length; it does not automatically translate Android policies or implement
+time-based/challenge-response generation. For a confirmed counter-based
+HMAC-SHA256 token, generate a code and advance the local counter with:
+
+```sh
+uv run mobilepasser -a
+```
+
+The Android and Python counters evolve independently. Further code generation
+in Android can make the imported counter stale. The import itself does not
+verify a login with the authentication server.
+
+Read-only format inspection is also available:
+
+```sh
+uv run python tools/android_backup_info.py /path/to/token.properties
+```
+
